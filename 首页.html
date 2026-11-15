@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>栖心小院 空间主理</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="kongjian.css">
+<style>
+/* 首页：入口 + 本周该做什么。板块按《空间主理人操作手册》排：物料管理（收纳地图 / 物料）· 场所服务（活动）· 日常维护 + 维修管理（维护）。
+   数字全部从表里算；周期事项是一张表，首页按到期排、点打卡。发布时拷成 index.html。 */
+.motto { font-family: var(--display); color: var(--fg-2); font-size: 14px; margin: -6px 0 16px; }
+.tbl .act { white-space: nowrap; }
+.tbl .nm { font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">MINDFULPEACE · 栖心小院</div>
+      <h1>空间主理</h1>
+      <div class="src">一进门，心就静下来。让空间会说话，让来过的人都想再来。</div>
+    </div>
+    <div class="hdr-r">
+      <span class="status" id="st"><span class="dot"></span><span id="stt">连接中…</span></span>
+      <button class="btn" id="btn-reload" title="重新拉取数据">刷新</button>
+      <button class="btn primary" id="btn-enter" hidden title="输入主理口令后可以编辑">进入维护</button>
+      <button class="btn" id="btn-logout" title="清除本机口令">退出</button>
+    </div>
+  </header>
+
+  <div class="week" id="week"></div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="card">
+    <h2>周期事项 <span class="sum" id="z-sum"></span><span style="flex:1"></span><button class="btn sm edit-only" id="btn-add-z">+ 事项</button></h2>
+    <div class="scroll"><table class="tbl" id="t-z"></table></div>
+  </div>
+  <p class="note">每周必做三件事：① 检查空间的整洁、有序与禅意 ② 确认本周活动安排，提前备妥场地与物料 ③ 迎接每一位到访者，传递温暖。少即是多，以空为美；非必要不采买；维护人人有责。</p>
+</div>
+
+<script src="kongjian.config.js"></script>
+<script src="gate.js"></script>
+<script src="kongjian.core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.KJC, $ = C.$, esc = C.esc, T = C.T;
+  var PERIOD_ORDER = ['每次活动后', '每周', '每月', '每季', '每年'];
+  var WD = ['日', '一', '二', '三', '四', '五', '六'];
+  function fmt(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function weekRange() { var d = new Date(); var dow = (d.getDay() + 6) % 7; var mon = new Date(d); mon.setDate(d.getDate() - dow); var sun = new Date(mon); sun.setDate(mon.getDate() + 6); return [fmt(mon), fmt(sun)]; }
+  function inWeek(b, w) {   // 看板一行是否落在本周：具体日期在区间内，或「每周X」这类常设
+    var d = b['日期'] || ''; if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10) >= w[0] && d.slice(0, 10) <= w[1];
+    return /每周|每天|每日/.test(d);
+  }
+  function dayLabel(b) { var d = b['日期'] || ''; if (!/^\d{4}-\d{2}-\d{2}/.test(d)) return d; var t = new Date(d.slice(0, 10) + 'T00:00:00'); return '周' + WD[t.getDay()] + ' ' + d.slice(5, 10); }
+
+  function renderWeek() {
+    var w = weekRange(), td = C.today();
+    var acts = T['看板'].filter(function (b) { return b['状态'] !== '取消' && inWeek(b, w); }).sort(function (a, b) { return (a['日期'] || '') < (b['日期'] || '') ? -1 : 1; });
+    var due = T['周期事项'].filter(function (z) { var n = C.nextDue(z); return n && n <= w[1]; }).sort(function (a, b) { return C.nextDue(a) < C.nextDue(b) ? -1 : 1; });
+    var overdue = C.openLoans().filter(function (l) { return l['预计归还'] && l['预计归还'] < td; }).length;
+    var unloc = T['库存'].filter(function (r) { return !C.locs(r).length; }).length;
+    $('#week').innerHTML = '<div class="wh"><span>本周</span><span class="mut">' + esc(w[0].slice(5) + ' ～ ' + w[1].slice(5)) + '</span></div>' +
+      '<div class="ln"><span class="k">活动</span><span>' + (acts.length ? acts.map(function (b) { return esc(dayLabel(b) + ' ' + b['活动主题']) + (b['时段'] ? ' <span class="mut">' + esc(b['时段']) + '</span>' : ''); }).join('　·　') : '<span class="mut">本周看板上没有活动</span>') + '</span></div>' +
+      '<div class="ln"><span class="k">到期</span><span>' + (due.length ? due.map(function (z) { var st = C.dueState(z); return '<span class="due-' + st + '">' + esc(z['事项']) + '</span>' + (st === 'over' ? ' <span class="tag warn">过期</span>' : ''); }).join('　·　') : '<span class="mut">没有到期的周期事项</span>') + '</span></div>' +
+      '<div class="ln"><span class="k">数字</span><span>借出未还 ' + C.openLoans().length + (overdue ? '（逾期 ' + overdue + '）' : '') + '　·　未定位 ' + unloc + ' / ' + T['库存'].length + '　·　已定位 ' + (T['库存'].length - unloc) + '</span></div>';
+  }
+  function renderCards() {
+    var w = weekRange();
+    var areas = C.areas().length, units = T['收纳区'].filter(function (z) { return C.levelOf(z) === '收纳体'; }).length, slots = T['收纳区'].filter(function (z) { return C.levelOf(z) === '格'; }).length;
+    var unloc = T['库存'].filter(function (r) { return !C.locs(r).length; }).length;
+    var acts = T['看板'].filter(function (b) { return b['状态'] !== '取消' && inWeek(b, w); }).length;
+    var mdue = T['周期事项'].filter(function (z) { return /维护|巡检|清洁/.test(z['去哪做'] + z['事项']) && C.dueState(z); }).length;
+    $('#cards').innerHTML =
+      '<a href="收纳地图.html"><div class="t">收纳地图</div><div class="m">收纳整理 · 位 → 物<br>' + areas + ' 分区 · ' + units + ' 收纳体 · ' + slots + ' 格</div></a>' +
+      '<a href="物料.html"><div class="t">物料</div><div class="m">分类 · 出入 · 盘点 · 采买<br>' + T['库存'].length + ' 条 · 未定位 ' + unloc + ' · 借出 ' + C.openLoans().length + '</div></a>' +
+      '<a href="活动.html"><div class="t">活动<span class="soon">建设中</span></div><div class="m">场所服务 · 排期 · 备物 · 验收<br>本周 ' + acts + ' 场</div></a>' +
+      '<a href="维护.html"><div class="t">维护<span class="soon">建设中</span></div><div class="m">日常维护 · 巡检 · 报修<br>' + (mdue ? mdue + ' 项到期' : '巡检记录 · 供应商') + '</div></a>';
+  }
+  function renderZ() {
+    var rows = T['周期事项'].slice().sort(function (a, b) {
+      var na = C.nextDue(a), nb = C.nextDue(b); if (!!na !== !!nb) return na ? -1 : 1; if (na !== nb) return na < nb ? -1 : 1;
+      return PERIOD_ORDER.indexOf(a['周期']) - PERIOD_ORDER.indexOf(b['周期']);
+    });
+    var edit = C.canEdit(), ndue = rows.filter(function (z) { return C.dueState(z); }).length;
+    $('#z-sum').textContent = rows.length + ' 项' + (ndue ? ' · ' + ndue + ' 项到期或快到期' : '');
+    var h = '<thead><tr><th>周期</th><th>事项</th><th>负责</th><th>上次完成</th><th>下次</th><th>去哪做</th>' + (edit ? '<th></th>' : '') + '</tr></thead><tbody>';
+    rows.forEach(function (z) {
+      var st = C.dueState(z), n = C.nextDue(z);
+      h += '<tr data-id="' + esc(z.id) + '"><td class="mut">' + esc(z['周期']) + '</td><td><span class="nm">' + esc(z['事项']) + '</span>' + (z['说明'] ? '<div class="mut">' + esc(z['说明']) + '</div>' : '') + '</td>' +
+        '<td class="mut">' + esc(z['负责']) + '</td><td class="num mut">' + esc(z['上次完成'] || '—') + (z['完成人'] ? '<div>' + esc(z['完成人']) + '</div>' : '') + '</td>' +
+        '<td class="num' + (st ? ' due-' + st : '') + '">' + esc(n || '随活动') + (st === 'over' ? ' <span class="tag warn">过期</span>' : '') + '</td>' +
+        '<td>' + (z['去哪做'] ? '<a class="loc" href="' + esc(z['去哪做']) + '.html" style="text-decoration:none">' + esc(z['去哪做']) + '</a>' : '') + '</td>' +
+        (edit ? '<td class="act"><button class="btn sm primary" data-act="done">打卡</button> <button class="btn sm" data-act="edit">编辑</button></td>' : '') + '</tr>';
+    });
+    if (!rows.length) h += '<tr><td colspan="7" class="nf">还没有周期事项</td></tr>';
+    $('#t-z').innerHTML = h + '</tbody>';
+  }
+  function render() { renderWeek(); renderCards(); renderZ(); }
+
+  function editZ(z) {
+    var isNew = !z; z = z || {};
+    C.openForm(isNew ? '新增周期事项' : '事项 · ' + z['事项'], [
+      { k: '事项', label: '事项', required: true },
+      { k: '周期', label: '周期', type: 'select', options: PERIOD_ORDER, half: true, def: '每周' },
+      { k: '负责', label: '负责（角色或法名）', half: true },
+      { k: '去哪做', label: '去哪做（页面名：收纳地图 / 物料 / 活动 / 维护）', half: true },
+      { k: '上次完成', label: '上次完成', type: 'date', half: true },
+      { k: '完成人', label: '完成人', half: true },
+      { k: '说明', label: '说明', type: 'textarea' }
+    ], z, function (v) { v.id = z.id || ''; return C.save('周期事项', v); }, isNew ? null : function () { return C.remove('周期事项', z.id); });
+  }
+  function checkZ(z) {
+    var who = ''; try { who = localStorage.getItem('kj-who') || ''; } catch (_) {}
+    C.openForm('打卡 · ' + z['事项'], [
+      { k: '上次完成', label: '完成日期', type: 'date', required: true, def: C.today(), half: true },
+      { k: '完成人', label: '完成人', half: true, def: who },
+      { k: '说明', label: '备注（可留空）', type: 'textarea', def: '' }
+    ], {}, function (v) { try { localStorage.setItem('kj-who', v['完成人'] || ''); } catch (_) {} var row = Object.assign({}, z, { '上次完成': v['上次完成'], '完成人': v['完成人'] }); if (v['说明']) row['说明'] = z['说明']; return C.save('周期事项', row); });
+  }
+  $('#btn-add-z').onclick = function () { editZ(null); };
+  $('#t-z').addEventListener('click', function (e) { var b = e.target.closest('button[data-act]'); if (!b) return; var z = C.byId('周期事项', b.closest('tr').dataset.id); if (!z) return; b.dataset.act === 'done' ? checkZ(z) : editZ(z); });
+
+  C.start({ render: render, allowPublic: true });
+})();
+</script>
+</body>
+</html>

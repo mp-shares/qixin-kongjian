@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>栖心小院 物料</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="kongjian.css">
+<style>
+/* 物料页：手册「物料管理」的账 —— 清单（分类 / 未定位归位）· 出入（借出 / 归还 / 结缘 / 报损）· 盘点 · 采买。
+   位 → 物 的事在收纳地图；这里是 物 → 账。共用样式 kongjian.css，逻辑 kongjian.core.js。 */
+.tbl select.assign { font: inherit; font-size: 12.5px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--fg); max-width: 220px; }
+.cnt { font-size: 12px; color: var(--fg-2); margin-left: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow"><a href="首页.html" style="color:inherit;text-decoration:none">MINDFULPEACE · 栖心小院 · 空间主理</a> › 物料管理</div>
+      <h1>物料</h1>
+      <div class="src">有什么、有几个、在哪、谁拿走了。按管理类 → 品类看账；位置点编号跳到收纳地图。</div>
+    </div>
+    <div class="hdr-r">
+      <span class="status" id="st"><span class="dot"></span><span id="stt">连接中…</span></span>
+      <button class="btn" id="btn-reload" title="重新拉取数据">刷新</button>
+      <button class="btn primary" id="btn-enter" hidden title="输入主理口令后可以编辑">进入维护</button>
+      <button class="btn" id="btn-logout" title="清除本机口令">退出</button>
+    </div>
+  </header>
+
+  <!-- 使用规则：《空间主理人操作手册 · 空间运维》物料管理「出入管理」 -->
+  <details class="rules">
+    <summary><span class="eyebrow">出入管理 · 入口端维护禅意净土，出口端持戒、利他、不贪著</span><span class="mut">点开看要点</span></summary>
+    <ul>
+      <li><b>入口端：</b>物品不随意进入空间。供养的陈列品先判断颜色、材质；书籍以导师出版物与标准书目为准；食物不留放。</li>
+      <li><b>固定配备的物料：</b>形成标准、贴上标签，不随意变更；如有挪用，及时归位。</li>
+      <li><b>活动物料：</b>集中摆放、标识清晰；<b>借出 / 归还登记</b>，及时跟进，定期清点。</li>
+      <li><b>结缘：</b>定期整理不常用的物料向大众结缘，避免囤积。<b>破损：</b>经审批再处理；佛像、法本保持恭敬，不轻易丢弃。</li>
+    </ul>
+  </details>
+
+  <div class="bar">
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-v="list" aria-selected="true">清单</button>
+      <button role="tab" data-v="loan">出入</button>
+      <button role="tab" data-v="count">盘点</button>
+      <button role="tab" data-v="buy">采买</button>
+    </div>
+    <span class="note" style="margin:0" id="sum"></span>
+  </div>
+
+  <section class="view" id="v-list">
+    <div class="tools">
+      <input type="search" id="q" placeholder="搜物料名 / 位置 / 品类 / 备注…" autocomplete="off">
+      <select id="f-zone"><option value="">全部分区</option></select>
+      <button class="btn primary edit-only" id="btn-add-item">+ 新增物料</button>
+    </div>
+    <div class="chips" id="f-class" style="margin-bottom:12px"></div>
+    <div class="card"><div class="scroll"><table class="tbl" id="t-list"></table></div></div>
+  </section>
+
+  <section class="view" id="v-loan" hidden>
+    <div class="card edit-only">
+      <h2>登记借出 / 结缘 / 报损</h2>
+      <form class="inline-form" id="loan-form">
+        <label>物料<input list="dl-items" name="物料名称" required placeholder="输名字选"></label>
+        <label>数量<input name="数量" required placeholder="如 3套"></label>
+        <label>类别<select name="类别"><option>借出</option><option>结缘</option><option>报损</option></select></label>
+        <label>借用人/去向<input name="借用人/去向" required></label>
+        <label>预计归还<input type="date" name="预计归还"></label>
+        <button class="btn primary" type="submit">登记</button>
+        <label style="grid-column:1/3">用途/活动<input name="用途/活动"></label>
+        <label>经手人<input name="经手人" id="loan-who"></label>
+        <label style="grid-column:span 2">备注<input name="备注"></label>
+      </form>
+    </div>
+    <div class="card"><h2>未归还 <span class="sum" id="loan-open-sum"></span></h2><div class="scroll"><table class="tbl" id="t-loan-open"></table></div></div>
+    <div class="card"><h2>最近记录 <span class="sum">最近 40 条</span></h2><div class="scroll"><table class="tbl" id="t-loan-all"></table></div></div>
+  </section>
+
+  <section class="view" id="v-count" hidden>
+    <div class="ph-page">
+      <b>盘点（下一轮做）</b>：按分区走一遍，每格逐条核「数对了 / 改数 / 不在这」，核完这一格记盘点日期；账上有但没定位的在「清单」里筛「未定位」直接归位。手册要求<b>每季一次</b>：实物 ↔ 库存 ↔ 借还对账，差异追根溯源。到期提醒在<a href="首页.html">首页</a>周期事项里。
+    </div>
+  </section>
+
+  <section class="view" id="v-buy" hidden>
+    <div class="ph-page">
+      <b>采买（下一轮做）</b>：采购计划表 —— 物料 / 数量 / 预算 / 渠道 / 状态（拟购 → 已批 → 已买 → 已入库），到货入库后变成库存行。手册原则：<b>非必要不采买</b>；日耗品主理人自决，非标、陈列、大型电器走议事（需求方自检 → 审批 → 到货验收）。现在的采购计划仍在 Drive 旧表《物料管理 / 采购计划》。
+    </div>
+  </section>
+</div>
+
+<script src="kongjian.config.js"></script>
+<script src="gate.js"></script>
+<script src="kongjian.core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.KJC, $ = C.$, esc = C.esc, T = C.T;
+  var state = { view: 'list', q: '', cls: '', zone: '' };
+  var h0 = decodeURIComponent((location.hash || '').replace('#', ''));
+  if (h0 === '未定位') state.zone = '__none'; else if (['list', 'loan', 'count', 'buy'].indexOf(h0) >= 0) state.view = h0;
+
+  function show(v) { state.view = v; document.querySelectorAll('#tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.v === v); }); document.querySelectorAll('section.view').forEach(function (s) { s.hidden = s.id !== 'v-' + v; }); try { history.replaceState(null, '', '#' + v); } catch (_) {} }
+  function mapLink(c) { return '<a class="loc" href="收纳地图.html#' + encodeURIComponent(c) + '" title="' + esc(C.pathOf(c)) + '" style="text-decoration:none">' + esc(c) + '</a>'; }
+  function assignSelect(r) {   // 未定位行：选位即归位（维护模式）
+    var zmap = C.zmap(), d = C.defaultZone(r), opts = '<option value="">选位归位…</option>' + (d && zmap[d] ? '<option value="' + esc(d) + '">⭐ ' + esc(d + ' ' + zmap[d]['名称']) + '</option>' : '');
+    C.areas().forEach(function (a) {
+      var units = C.children(a['编号']); if (!units.length) { opts += '<option value="' + esc(a['编号']) + '">' + esc(a['编号'] + ' ' + a['名称'] + '（分区）') + '</option>'; return; }
+      opts += '<optgroup label="' + esc(a['编号'] + ' ' + a['名称']) + '">' + units.map(function (u) { return '<option value="' + esc(u['编号']) + '">' + esc(u['编号'] + ' ' + u['名称']) + '</option>' + C.children(u['编号']).map(function (s) { return '<option value="' + esc(s['编号']) + '">　' + esc(s['编号'] + ' ' + s['名称']) + '</option>'; }).join(''); }).join('') + '</optgroup>';
+    });
+    return '<select class="assign edit-only" data-act="assign">' + opts + '</select>';
+  }
+
+  function renderFilters() {
+    var areas = C.areas().map(function (z) { return z['名称']; });
+    var fz = $('#f-zone'), cur = state.zone, unloc = T['库存'].filter(function (r) { return !C.locs(r).length; }).length;
+    fz.innerHTML = '<option value="">全部分区</option>' + areas.map(function (a) { return '<option' + (a === cur ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '<option value="__none"' + (cur === '__none' ? ' selected' : '') + '>未定位（' + unloc + '）</option>';
+    var classes = T['库存'].map(C.classOf).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(C.sortClass);
+    var cnt = {}; T['库存'].forEach(function (r) { var c = C.classOf(r); cnt[c] = (cnt[c] || 0) + 1; });
+    $('#f-class').innerHTML = ['<button class="chip" data-c="" aria-pressed="' + (!state.cls) + '">全部<span class="cnt">' + T['库存'].length + '</span></button>'].concat(classes.map(function (c) { return '<button class="chip" data-c="' + esc(c) + '" aria-pressed="' + (state.cls === c) + '">' + esc(c) + '<span class="cnt">' + cnt[c] + '</span></button>'; })).join('');
+    $('#sum').textContent = T['库存'].length + ' 条 · 已定位 ' + (T['库存'].length - unloc) + ' · 未定位 ' + unloc + ' · 借出未还 ' + C.openLoans().length + ' 笔';
+  }
+  function renderList() {
+    var q = state.q.toLowerCase();
+    var rows = T['库存'].filter(function (r) {
+      if (state.cls && C.classOf(r) !== state.cls) return false;
+      if (state.zone === '__none' && C.locs(r).length) return false;
+      if (state.zone && state.zone !== '__none' && !C.locs(r).some(function (c) { return C.areaOf(c) === state.zone; })) return false;
+      if (q && [r['物料名称'], r['存放位置'], r['备注'], r['对照产品库'], r['批次'], C.pinOf(r), C.locs(r).map(C.pathOf).join(' ')].join(' ').toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    rows.sort(function (a, b) { return C.sortClass(C.classOf(a), C.classOf(b)) || C.natCmp(C.pinOf(a), C.pinOf(b)) || C.natCmp(a['物料名称'], b['物料名称']); });
+    var edit = C.canEdit();
+    var h = '<thead><tr><th>物料</th><th>数量</th><th>分类</th><th>位置</th>' + (edit ? '<th>归属 / 状态</th><th></th>' : '<th>状态</th>') + '</tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var lq = C.loanedQty(r['物料名称']), L = C.locs(r);
+      h += '<tr data-id="' + esc(r.id) + '"><td><strong>' + esc(r['物料名称']) + '</strong>' + (edit && r['备注'] ? '<div class="mut">' + esc(r['备注']) + '</div>' : '') + '</td>' +
+        '<td class="num">' + esc(r['数量']) + (lq ? '<span class="tag warn">借出 ' + esc(lq) + '</span>' : '') + '</td>' +
+        '<td class="mut">' + esc(C.classOf(r)) + ' · ' + esc(C.pinOf(r)) + '</td>' +
+        '<td>' + (L.length ? L.map(mapLink).join('') + '<div class="mut">' + esc(L.map(C.pathOf).join('；')) + '</div>' : (edit ? assignSelect(r) : '<span class="loc none">未定位</span>')) + '</td>' +
+        '<td class="mut">' + (edit ? esc(r['归属'] === '小院公共' ? '' : r['归属']) : '') + (r['状态'] && r['状态'] !== '在库' ? ' <span class="tag">' + esc(r['状态']) + '</span>' : '') + '</td>' +
+        (edit ? '<td class="act"><button class="btn sm" data-act="move">移</button> <button class="btn sm" data-act="edit">编辑</button></td>' : '') + '</tr>';
+    });
+    h += '</tbody>';
+    if (!rows.length) h += '<tbody><tr><td colspan="6" class="nf">没有匹配的物料</td></tr></tbody>';
+    $('#t-list').innerHTML = h;
+  }
+  function renderLoan() {
+    var today = C.today(), edit = C.canEdit();
+    var open = C.openLoans().sort(function (a, b) { return a['日期'] < b['日期'] ? 1 : -1; });
+    $('#loan-open-sum').textContent = open.length + ' 笔';
+    var row = function (l, withReturn) {
+      return '<tr data-id="' + esc(l.id) + '"><td class="num mut">' + esc(l['日期']) + '</td><td><strong>' + esc(l['物料名称']) + '</strong> <span class="mut">× ' + esc(l['数量']) + '</span></td>' +
+        '<td>' + esc(l['借用人/去向'] || '') + (l['用途/活动'] ? '<div class="mut">' + esc(l['用途/活动']) + '</div>' : '') + '</td>' +
+        '<td class="mut">' + esc(l['类别']) + (l['状态'] && l['状态'] !== l['类别'] ? ' · ' + esc(l['状态']) : '') + (l['预计归还'] && !l['归还日期'] ? '<div>预计 ' + esc(l['预计归还']) + (l['预计归还'] < today ? ' <span class="tag warn">逾期</span>' : '') + '</div>' : '') + (l['归还日期'] ? '<div>还于 ' + esc(l['归还日期']) + '</div>' : '') + '</td>' +
+        (edit ? '<td class="act">' + (withReturn ? '<button class="btn sm primary" data-act="return">归还</button> ' : '') + '<button class="btn sm" data-act="edit">编辑</button></td>' : '') + '</tr>';
+    };
+    var head = '<thead><tr><th>日期</th><th>物料</th><th>借用人 / 用途</th><th>类别 / 期限</th>' + (edit ? '<th></th>' : '') + '</tr></thead>';
+    $('#t-loan-open').innerHTML = head + '<tbody>' + (open.length ? open.map(function (l) { return row(l, true); }).join('') : '<tr><td colspan="5" class="nf">没有未归还的物料</td></tr>') + '</tbody>';
+    var all = T['借还'].slice().sort(function (a, b) { return (a['日期'] + a.id) < (b['日期'] + b.id) ? 1 : -1; }).slice(0, 40);
+    $('#t-loan-all').innerHTML = head + '<tbody>' + (all.length ? all.map(function (l) { return row(l, false); }).join('') : '<tr><td colspan="5" class="nf">还没有记录</td></tr>') + '</tbody>';
+    try { $('#loan-who').value = $('#loan-who').value || localStorage.getItem('kj-who') || ''; } catch (_) {}
+  }
+  function render() { renderFilters(); renderList(); renderLoan(); }
+
+  $('#tabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-v]'); if (b) show(b.dataset.v); });
+  $('#q').addEventListener('input', function () { state.q = this.value.trim(); renderList(); });
+  $('#f-zone').addEventListener('change', function () { state.zone = this.value; renderList(); });
+  $('#f-class').addEventListener('click', function (e) { var c = e.target.closest('.chip'); if (!c) return; state.cls = c.dataset.c; renderFilters(); renderList(); });
+  $('#btn-add-item').onclick = function () { C.editItem(null); };
+  $('#t-list').addEventListener('click', function (e) { var b = e.target.closest('button[data-act]'); if (!b) return; var r = C.byId('库存', b.closest('tr').dataset.id); if (!r) return; b.dataset.act === 'move' ? C.moveItem(r) : C.editItem(r); });
+  $('#t-list').addEventListener('change', function (e) { var s = e.target.closest('select[data-act="assign"]'); if (!s || !s.value) return; var r = C.byId('库存', s.closest('tr').dataset.id); if (r) C.save('库存', Object.assign({}, r, { '存放位置': s.value })); });
+  $('#loan-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, v = {}; Array.prototype.forEach.call(f.elements, function (el) { if (el.name) v[el.name] = el.value.trim(); });
+    v['日期'] = C.today(); v['状态'] = v['类别'] === '借出' ? '借出' : (v['类别'] === '结缘' ? '已结缘' : '已报损');
+    try { localStorage.setItem('kj-who', v['经手人'] || ''); } catch (_) {}
+    C.save('借还', v).then(function () { f.reset(); try { $('#loan-who').value = localStorage.getItem('kj-who') || ''; } catch (_) {} });
+  });
+  function loanClick(e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var l = C.byId('借还', b.closest('tr').dataset.id); if (!l) return;
+    if (b.dataset.act === 'return') C.save('借还', Object.assign({}, l, { '归还日期': C.today(), '状态': '已还' }));
+    else C.editLoan(l);
+  }
+  $('#t-loan-open').addEventListener('click', loanClick); $('#t-loan-all').addEventListener('click', loanClick);
+
+  show(state.view);
+  C.start({ render: render, allowPublic: true });
+})();
+</script>
+</body>
+</html>

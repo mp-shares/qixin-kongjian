@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>栖心小院 收纳地图</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="kongjian.css">
+<style>
+/* 收纳地图页：一个分区一个页签；页签里是 收纳体（A1）→ 格（A1-1）的树。分区 / 收纳体 / 格 三层都能直接拍照上传、把物料归进去。
+   共用样式在 kongjian.css，逻辑在 kongjian.core.js。 */
+.rules { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 13.5px; }
+.rules summary { cursor: pointer; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; list-style: none; }
+.rules summary::-webkit-details-marker { display: none; }
+.rules summary .mut { font-size: 12.5px; }
+.rules ul { margin: 8px 0 0; padding-left: 18px; color: var(--fg-2); line-height: 1.6; }
+.rules li b { color: var(--fg); font-weight: 500; }
+.topbar { position: sticky; top: 0; z-index: 5; padding: 8px 16px 6px; margin: 0 -16px 12px; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(6px); display: grid; gap: 8px; }
+.search { position: relative; }
+.search input { width: 100%; font: inherit; font-size: 15px; padding: 9px 36px 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--fg); }
+.search .btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); }
+.ztabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ztabs button { font: inherit; font-size: 13.5px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--fg); cursor: pointer; white-space: nowrap; }
+.ztabs button .code { margin-right: 4px; }
+.ztabs button.dim { color: var(--fg-2); }
+.ztabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ztabs button[aria-selected="true"] .code { color: #fff; }
+.ztabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.area > .ah { padding: 12px 14px; }
+.area > .ah .desc { flex-basis: 100%; font-size: 13px; color: var(--fg-2); }
+.area > .ah .ph { flex-basis: 100%; }
+.slot.empty-slot .sh .nm { color: var(--fg-2); font-weight: 400; }
+.slot.empty-slot { padding: 5px 0 2px; }
+.hide-empty .slot.empty-slot { display: none; }
+.slots-note { font-size: 12px; color: var(--fg-2); padding: 4px 0 0; }
+.btn.cam { padding-left: 8px; padding-right: 8px; }
+.pick { display: grid; gap: 8px; }
+.pick input[type=search] { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--fg); width: 100%; }
+.pick .lst { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; }
+.form .pick label { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-top: 1px dashed var(--line); font-size: 14px; color: var(--fg); cursor: pointer; }
+.form .pick label > input { width: auto; margin: 0; flex: none; }
+.pick label:first-child { border-top: 0; }
+.pick label .n { flex: 1; min-width: 0; }
+.pick label .q { color: var(--fg-2); font-size: 13px; white-space: nowrap; }
+.pick label.placed { color: var(--fg-2); }
+.pick .gh { font-size: 12px; color: var(--fg-2); padding: 8px 0 2px; letter-spacing: .04em; }
+.pick .cnt { font-size: 12.5px; color: var(--fg-2); }
+.btn.cam.has { color: var(--accent); border-color: var(--accent); }
+.unit .uh .ph { margin-top: 6px; }
+.slot .sh .actions .ph { display: inline-flex; }
+.slot .sh .actions .ph img { width: 36px; height: 36px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow"><a href="首页.html" style="color:inherit;text-decoration:none">MINDFULPEACE · 栖心小院 · 空间主理</a> › 收纳整理</div>
+      <h1>收纳地图</h1>
+      <div class="src">东西在哪、哪一格放什么。收纳区域 = 分区 → 收纳体（柜子 / 篮筐）→ 格（一层 / 一门）。</div>
+    </div>
+    <div class="hdr-r">
+      <span class="status" id="st"><span class="dot"></span><span id="stt">连接中…</span></span>
+      <button class="btn" id="btn-reload" title="重新拉取数据">刷新</button>
+      <button class="btn primary" id="btn-enter" hidden title="输入主理口令后可以编辑">进入维护</button>
+      <button class="btn" id="btn-logout" title="清除本机口令">退出</button>
+    </div>
+  </header>
+
+  <!-- 使用规则：术语照《空间主理人操作手册 · 空间运维》物料管理「收纳整理 / 出入管理」 -->
+  <details class="rules" open>
+    <summary><span class="eyebrow">收纳整理三步 · 设置收纳区域 → 梳理 → 维护</span><span class="mut">让空间更禅意，让内心更清净</span></summary>
+    <ul>
+      <li><b>分区域、贴标识。</b>空间内收纳体（柜子 / 篮筐 / 桌面下方）与集中存储区各有编号，每格贴标签；常用的放易取处，通常一起使用的放相邻。</li>
+      <li><b>固定配备的物料：</b>形成标准、贴上标签，不随意变更收纳位置；<b>如有挪用，及时归位</b>。</li>
+      <li><b>活动物料：</b>集中摆放、标识清晰；借出 / 归还登记，<b>定期清点</b>。</li>
+      <li><b>物料增减、移动是必然的：</b>定期按标签、分区域重新归类；如有减少，按记录追根溯源，及时增补。</li>
+    </ul>
+  </details>
+
+  <div class="topbar">
+    <div class="search"><input type="search" id="q" placeholder="搜物料：名字 / 位置编号 / 品类…" autocomplete="off"><button class="btn sm" id="q-x" hidden title="清除">×</button></div>
+    <div class="ztabs" id="ztabs" role="tablist"></div>
+  </div>
+
+  <div class="tools">
+    <button class="btn primary edit-only" id="btn-add-area">+ 新增分区</button>
+    <label class="chip" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="map-items" checked> 显示物料</label>
+    <label class="chip" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="map-hide-empty"> 收起空格</label>
+    <span class="note" style="margin:0" id="map-sum"></span>
+  </div>
+
+  <div id="hits"></div>
+  <div id="map"></div>
+
+  <p class="note edit-only" style="margin-top:18px">录入顺序：进一个分区页签 → 分区先拍一张整体照 → 「+ 收纳体」拍一张 → 在它下面「+ 格」→ 把物料归进去。「+ 物料」从清单里勾选放到这一层（已在别处的勾了就挪过来）；📷 直接上传到那一层；点缩略图放大；要删照片进「编辑」。没定位的物料在物料页归位。标签二维码指向 <code>收纳地图.html#A1-1</code> 这种格编号，扫码直达那一格。</p>
+</div>
+<input type="file" id="ph-file" accept="image/*" multiple capture="environment" hidden>
+
+<script src="kongjian.config.js"></script>
+<script src="gate.js"></script>
+<script src="kongjian.core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.KJC, $ = C.$, esc = C.esc, T = C.T;
+  var TAB_KEY = 'kj-map-tab';
+  var state = { tab: decodeURIComponent((location.hash || '').replace('#', '')) || (function () { try { return localStorage.getItem(TAB_KEY) || ''; } catch (_) { return ''; } })(), q: '', focus: '' };
+  function setTab(t, focus) { state.tab = t; state.focus = focus || ''; try { localStorage.setItem(TAB_KEY, t); history.replaceState(null, '', '#' + (focus || t)); } catch (_) {} renderMap(); if (!focus) window.scrollTo(0, 0); }
+  function areaCodeOf(code) { var z = C.zmap()[code], guard = 0; while (z && C.levelOf(z) !== '分区' && guard++ < 6) z = C.parentOf(z); return z ? z['编号'] : ''; }
+  function camBtn(z) { var n = C.photos(z).length; return '<button class="btn sm cam edit-only' + (n ? ' has' : '') + '" data-act="photo" title="拍照 / 上传到 ' + esc(z['编号']) + '">📷' + (n ? ' ' + n : '') + '</button>'; }
+  function pickBtn() { return '<button class="btn sm edit-only" data-act="pick" title="从物料清单里选，放到这里">+ 物料</button>'; }
+  function matches(r, q) { return [r['物料名称'], r['存放位置'], r['备注'], r['对照产品库'], C.pinOf(r), C.classOf(r), C.locs(r).map(C.pathOf).join(' ')].join(' ').toLowerCase().indexOf(q) >= 0; }
+
+  function renderMap() {
+    var showItems = $('#map-items').checked, zmap = C.zmap(), q = state.q.toLowerCase();
+    var byZone = {}, unloc = [];
+    T['库存'].forEach(function (r) { var L = C.locs(r); if (!L.length) { unloc.push(r); return; } L.forEach(function (c) { (byZone[c] = byZone[c] || []).push(r); }); });
+    // 搜索：命中的物料 + 它所在的格及其上级都标 hit
+    var hits = q ? T['库存'].filter(function (r) { return matches(r, q); }) : [], hitId = {}, hitZone = {};
+    hits.forEach(function (r) { hitId[r.id] = 1; C.locs(r).forEach(function (c) { var z = zmap[c], g = 0; while (z && g++ < 6) { hitZone[z['编号']] = 1; z = C.parentOf(z); } }); });
+    var hz = function (code) { return hitZone[code] ? ' hit' : ''; };
+    var countUnder = function (code) { var n = (byZone[code] || []).length; C.children(code).forEach(function (c) { n += countUnder(c['编号']); }); return n; };
+    var itemLine = function (r) { var lq = C.loanedQty(r['物料名称']); return '<div class="item' + (hitId[r.id] ? ' hit' : '') + '" data-id="' + esc(r.id) + '"><span class="n">' + esc(r['物料名称']) + (r['归属'] && !C.isTemple(r) ? ' <span class="tag">' + esc(r['归属']) + '</span>' : '') + (r['状态'] && r['状态'] !== '在库' ? ' <span class="tag">' + esc(r['状态']) + '</span>' : '') + (lq ? ' <span class="tag warn">借出 ' + esc(lq) + '</span>' : '') + '</span><span class="q">× ' + esc(r['数量']) + ' <button class="btn sm edit-only" data-act="move">移</button></span></div>'; };
+    var itemsHtml = function (code) { var it = byZone[code] || []; if (!showItems || !it.length) return ''; return it.map(itemLine).join(''); };
+    var areas = C.areas();
+    // hash / 扫码直达某个格：页签切到它的分区，渲染后滚过去闪一下
+    if (zmap[state.tab] && C.levelOf(zmap[state.tab]) !== '分区') { state.focus = state.tab; state.tab = areaCodeOf(state.tab); }
+    var placed = {}; areas.forEach(function (a) { placed[a['编号']] = 1; });
+    areas.forEach(function (a) { C.children(a['编号']).forEach(function (u) { placed[u['编号']] = 1; C.children(u['编号']).forEach(function (s) { placed[s['编号']] = 1; C.children(s['编号']).forEach(function (x) { placed[x['编号']] = 1; }); }); }); });
+    var orphans = T['收纳区'].filter(function (z) { return !placed[z['编号']]; });
+    var nUnit = T['收纳区'].filter(function (z) { return C.levelOf(z) === '收纳体'; }).length, nSlot = T['收纳区'].filter(function (z) { return C.levelOf(z) === '格'; }).length;
+    $('#map-sum').innerHTML = esc(areas.length + ' 分区 · ' + nUnit + ' 收纳体 · ' + nSlot + ' 格 · 已定位 ' + (T['库存'].length - unloc.length) + ' / ' + T['库存'].length + ' 条') + (unloc.length ? ' · <a href="物料.html#未定位">未定位 ' + unloc.length + ' 条去物料页归位</a>' : '');
+
+    // 页签：每个分区一个 + 未定位（+ 未归入分区的孤儿）
+    var tabs = areas.map(function (a) { return { id: a['编号'], html: '<span class="code">' + esc(a['编号']) + '</span>' + esc(a['名称']), dim: a['状态'] !== '启用' }; });
+    if (orphans.length) tabs.push({ id: '_orphan', html: '未归入分区 ' + orphans.length, dim: true });
+    if (!tabs.some(function (t) { return t.id === state.tab; })) state.tab = tabs.length ? tabs[0].id : '';
+    $('#ztabs').innerHTML = tabs.map(function (t) { return '<button role="tab" data-tab="' + esc(t.id) + '" aria-selected="' + (t.id === state.tab) + '"' + (t.dim ? ' class="dim"' : '') + '>' + t.html + '</button>'; }).join('');
+
+    // 搜索结果卡：每条带位置按钮，点了跳到那一格
+    $('#q-x').hidden = !q;
+    $('#hits').innerHTML = !q ? '' : '<div class="card"><h2>搜「' + esc(state.q) + '」 <span class="sum">' + (hits.length ? hits.length + ' 条 · 点位置跳过去' : '没登记这样东西') + '</span></h2>' + (hits.length ? '<div style="padding:6px 14px 10px">' +
+      hits.sort(function (a, b) { return C.natCmp(a['物料名称'], b['物料名称']); }).slice(0, 60).map(function (r) {
+        var L = C.locs(r), lq = C.loanedQty(r['物料名称']);
+        return '<div class="item" data-id="' + esc(r.id) + '"><span class="n"><strong>' + esc(r['物料名称']) + '</strong> <span class="q">× ' + esc(r['数量']) + '</span>' + (lq ? ' <span class="tag warn">借出 ' + esc(lq) + '</span>' : '') + ' <span class="mut">' + esc(C.classOf(r) + ' · ' + C.pinOf(r)) + '</span></span><span class="q">' +
+          (L.length ? L.map(function (c) { return '<button class="loc" data-go="' + esc(c) + '" title="' + esc(C.pathOf(c)) + '" style="border:0;cursor:pointer;font:inherit;font-size:12px">' + esc(c) + ' ' + esc(zmap[c] ? zmap[c]['名称'] : '') + '</button>'; }).join(' ') : '<a class="loc none" href="物料.html#未定位" style="text-decoration:none">未定位 · 去物料页归位</a>') + '</span></div>';
+      }).join('') + (hits.length > 60 ? '<div class="mut" style="padding-top:6px">只列前 60 条，再多打几个字</div>' : '') + '</div>' : '') + '</div>';
+    var h = '';
+    if (state.tab === '_orphan') {
+      h += '<div class="card"><h2>未归入分区 <span class="sum">上级填错或缺失</span></h2><div style="padding:6px 14px 10px">' + orphans.map(function (z) { return '<div class="item" data-zone="' + esc(z['编号']) + '"><span class="n"><span class="code">' + esc(z['编号']) + '</span>' + esc(z['名称']) + ' <span class="mut">上级：' + esc(z['上级'] || '（空）') + '</span></span><button class="btn sm edit-only" data-act="zone">编辑</button></div>'; }).join('') + '</div></div>';
+    } else if (zmap[state.tab]) {
+      var a = zmap[state.tab], units = C.children(a['编号']);
+      h += '<div class="area" data-zone="' + esc(a['编号']) + '"><div class="ah' + hz(a['编号']) + '"><span class="code">' + esc(a['编号']) + '</span><span class="nm">' + esc(a['名称']) + '</span>' + (a['状态'] !== '启用' ? '<span class="tag">' + esc(a['状态']) + '</span>' : '') +
+        '<span class="mut">' + esc(a['存放类别'] || a['类型'] || '') + ' · ' + units.length + ' 收纳体 · ' + countUnder(a['编号']) + ' 条</span><span class="sp"></span>' +
+        '<span class="actions">' + pickBtn() + camBtn(a) + '<button class="btn sm primary edit-only" data-act="add-unit">+ 收纳体</button><button class="btn sm edit-only" data-act="zone">编辑</button></span>' +
+        (a['说明'] ? '<div class="desc">' + esc(a['说明']) + '</div>' : '') + C.phHtml(a, 'lg') + '</div>' +
+        (itemsHtml(a['编号']) ? '<div class="unit" style="margin-bottom:10px"><div class="ub"><div class="slots-note">直接记在分区下、还没定到格的物料</div>' + itemsHtml(a['编号']) + '</div></div>' : '') +
+        '<div class="units">' + (units.length ? units.map(function (u) {
+          var slots = C.children(u['编号']), emptyN = slots.filter(function (s) { return !countUnder(s['编号']); }).length;
+          return '<div class="unit' + hz(u['编号']) + '" data-zone="' + esc(u['编号']) + '"><div class="uh"><div class="t"><div><span class="code">' + esc(u['编号']) + '</span><span class="nm">' + esc(u['名称']) + '</span>' + (u['状态'] !== '启用' ? '<span class="tag">' + esc(u['状态']) + '</span>' : '') + '</div>' +
+            '<div class="mut">' + esc([u['类型'], u['存放类别']].filter(Boolean).join(' · ')) + (slots.length ? ' · ' + slots.length + ' 格' : '') + ' · ' + countUnder(u['编号']) + ' 条</div>' + (u['说明'] ? '<div class="mut">' + esc(u['说明']) + '</div>' : '') + C.phHtml(u) + '</div><span class="actions">' + pickBtn() + camBtn(u) + '</span></div>' +
+            '<div class="ub">' + itemsHtml(u['编号']) +
+            slots.map(function (s) { var empty = !countUnder(s['编号']); return '<div class="slot' + (empty ? ' empty-slot' : '') + hz(s['编号']) + '" data-zone="' + esc(s['编号']) + '"><div class="sh"><span><span class="code">' + esc(s['编号']) + '</span><span class="nm">' + esc(s['名称']) + '</span> <span class="mut">' + esc(s['存放类别'] || '') + '</span></span><span class="actions">' + C.phHtml(s) + pickBtn() + camBtn(s) + '<button class="btn sm edit-only" data-act="zone">编辑</button></span></div>' + (s['说明'] ? '<div class="mut">' + esc(s['说明']) + '</div>' : '') + itemsHtml(s['编号']) + '</div>'; }).join('') +
+            (emptyN && $('#map-hide-empty').checked ? '<div class="slots-note">已收起 ' + emptyN + ' 个空格</div>' : '') +
+            '<div class="actions edit-only" style="padding-top:8px"><button class="btn sm" data-act="add-slot">+ 格</button><button class="btn sm" data-act="zone">编辑</button></div></div></div>';
+        }).join('') : '<div class="empty">这个分区还没有收纳体' + (C.canEdit() ? '，点右上「+ 收纳体」' : '') + '</div>') + '</div></div>';
+    }
+    if (!T['收纳区'].length) h += '<div class="card"><div class="nf">还没有分区。先点「新增分区」，或本地 sync.py push 收纳区。</div></div>';
+    $('#map').innerHTML = h; C.hydratePhotos($('#map'));
+    $('#map').classList.toggle('hide-empty', $('#map-hide-empty').checked);
+    if (state.focus) { var el = $('#map [data-zone="' + state.focus.replace(/"/g, '') + '"]'); state.focus = ''; if (el) { el.classList.remove('empty-slot'); el.classList.add('focus'); setTimeout(function () { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50); } }
+  }
+  var qT = null;
+  $('#q').addEventListener('input', function () {
+    var v = this.value.trim(); clearTimeout(qT);
+    qT = setTimeout(function () {
+      state.q = v;
+      if (v) {   // 有命中就切到第一条所在的分区；全是未定位就切到未定位
+        var q = v.toLowerCase(), first = T['库存'].filter(function (r) { return matches(r, q); })[0];
+        if (first) { var L = C.locs(first); var t = L.length ? areaCodeOf(L[0]) : ''; if (t && t !== state.tab) { state.tab = t; try { localStorage.setItem(TAB_KEY, t); } catch (_) {} } }
+      }
+      renderMap();
+    }, 150);
+  });
+  window.addEventListener('hashchange', function () { var h = decodeURIComponent((location.hash || '').replace('#', '')); if (h && h !== state.tab) { state.tab = h; renderMap(); } });   // 扫码/改地址栏直达
+  $('#q-x').onclick = function () { $('#q').value = ''; state.q = ''; renderMap(); $('#q').focus(); };
+  $('#hits').addEventListener('click', function (e) { var b = e.target.closest('button[data-go]'); if (!b) return; var c = b.dataset.go; setTab(areaCodeOf(c), c); });
+
+  // 「+ 物料」：从库存里勾选，放到这个分区 / 收纳体 / 格（写库存的存放位置，物料页同步看到）
+  function pickItems(z) {
+    var code = z['编号'], panel = document.createElement('div'); panel.className = 'pick';
+    var checked = {};
+    function nChecked() { return Object.keys(checked).filter(function (k) { return checked[k]; }).length; }
+    function draw(q) {
+      q = (q || '').toLowerCase();
+      var rows = T['库存'].filter(function (r) { return !q || matches(r, q); });
+      var here = rows.filter(function (r) { return C.locs(r).indexOf(code) >= 0; });
+      var unloc = rows.filter(function (r) { return !C.locs(r).length; }).sort(function (a, b) { return C.sortClass(C.classOf(a), C.classOf(b)) || C.natCmp(a['物料名称'], b['物料名称']); });
+      var other = rows.filter(function (r) { return C.locs(r).length && C.locs(r).indexOf(code) < 0; }).sort(function (a, b) { return C.natCmp(a['物料名称'], b['物料名称']); });
+      var line = function (r, placed) { return '<label' + (placed ? ' class="placed"' : '') + '><input type="checkbox" value="' + esc(r.id) + '"' + (checked[r.id] ? ' checked' : '') + '><span class="n">' + esc(r['物料名称']) + ' <span class="q">× ' + esc(r['数量']) + '</span></span><span class="q">' + (placed ? esc(C.locs(r).join(' / ')) : '<span class="loc none">未定位</span>') + '</span></label>'; };
+      panel.innerHTML = '<input type="search" placeholder="搜物料名 / 品类…" value="' + esc(q) + '"><div class="cnt">已选 ' + nChecked() + ' 件 → ' + esc(code + ' ' + C.pathOf(code)) + (here.length ? ' · 这里已有 ' + here.length + ' 件' : '') + '</div><div class="lst">' +
+        (unloc.length ? '<div class="gh">未定位 ' + unloc.length + '</div>' + unloc.map(function (r) { return line(r, false); }).join('') : '') +
+        (other.length ? '<div class="gh">已在别处（勾了就挪过来）' + other.length + '</div>' + other.map(function (r) { return line(r, true); }).join('') : '') +
+        (!unloc.length && !other.length ? '<div class="empty">没有匹配的物料</div>' : '') + '</div>';
+      panel.querySelector('input[type=search]').addEventListener('input', function () { var v = this.value, pos = this.selectionStart; draw(v); var i2 = panel.querySelector('input[type=search]'); i2.focus(); i2.setSelectionRange(pos, pos); });
+    }
+    panel.addEventListener('change', function (e) { var c = e.target.closest('input[type=checkbox]'); if (!c) return; checked[c.value] = c.checked; var el = panel.querySelector('.cnt'); el.textContent = el.textContent.replace(/已选 \d+/, '已选 ' + nChecked()); });
+    draw('');
+    C.openForm('放物料到 ' + code + ' ' + z['名称'], [], {}, function () {
+      var ids = Object.keys(checked).filter(function (k) { return checked[k]; });
+      if (!ids.length) { C.toast('还没勾选物料'); return Promise.reject(); }
+      var p = Promise.resolve(), n = 0;
+      ids.forEach(function (id) { p = p.then(function () { var r = C.byId('库存', id); if (!r) return; return C.save('库存', Object.assign({}, r, { '存放位置': code }), true).then(function () { n++; }); }); });
+      return p.then(function () { C.renderAll(); C.toast('已放入 ' + n + ' 件到 ' + code); });
+    }, null, panel);
+    setTimeout(function () { var i = panel.querySelector('input[type=search]'); i && i.focus(); }, 60);
+  }
+  $('#ztabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+  $('#btn-add-area').onclick = function () { C.editZone(null, { '层级': '分区' }); };
+  $('#map-items').onchange = renderMap;
+  $('#map-hide-empty').onchange = renderMap;
+  var photoTarget = '';
+  $('#ph-file').addEventListener('change', function () { var fs = Array.prototype.slice.call(this.files || []), code = photoTarget; this.value = ''; if (code) C.addPhotos('收纳区', code, fs); });   // 先拷出来再清空，FileList 是活的
+  $('#map').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var zc = b.closest('[data-zone]'), z = zc ? C.zmap()[zc.dataset.zone] : null;
+    if (b.dataset.act === 'zone') return C.editZone(z);
+    if (b.dataset.act === 'photo') { photoTarget = z['编号']; return $('#ph-file').click(); }
+    if (b.dataset.act === 'pick') return pickItems(z);
+    if (b.dataset.act === 'add-unit') return C.editZone(null, { '层级': '收纳体', '上级': z['编号'] });
+    if (b.dataset.act === 'add-slot') return C.editZone(null, { '层级': '格', '上级': z['编号'] });
+    var r = C.byId('库存', b.closest('[data-id]').dataset.id); if (r) C.moveItem(r);
+  });
+  $('#map').addEventListener('change', function (e) {
+    var s = e.target.closest('select[data-act="assign"]'); if (!s || !s.value) return;
+    var r = C.byId('库存', s.closest('[data-id]').dataset.id); if (r) C.save('库存', Object.assign({}, r, { '存放位置': s.value }));
+  });
+
+  C.start({ render: renderMap, allowPublic: true });
+})();
+</script>
+</body>
+</html>
