@@ -49,6 +49,7 @@
   'use strict';
   var C = window.KJC, $ = C.$, esc = C.esc, T = C.T;
   var PERIOD_ORDER = ['每次活动后', '每周', '每月', '每季', '每年'];
+  var GO_PAGES = ['收纳地图', '物料', '活动', '维护'];   // 「去哪做」只认这几个页面名（表里可手改，防 javascript: 之类的链接）
   var WD = ['日', '一', '二', '三', '四', '五', '六'];
   function fmt(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function weekRange() { var d = new Date(); var dow = (d.getDay() + 6) % 7; var mon = new Date(d); mon.setDate(d.getDate() - dow); var sun = new Date(mon); sun.setDate(mon.getDate() + 6); return [fmt(mon), fmt(sun)]; }
@@ -94,7 +95,7 @@
       h += '<tr data-id="' + esc(z.id) + '"><td class="mut">' + esc(z['周期']) + '</td><td><span class="nm">' + esc(z['事项']) + '</span>' + (z['说明'] ? '<div class="mut">' + esc(z['说明']) + '</div>' : '') + '</td>' +
         '<td class="mut">' + esc(z['负责']) + '</td><td class="num mut">' + esc(z['上次完成'] || '—') + (z['完成人'] ? '<div>' + esc(z['完成人']) + '</div>' : '') + '</td>' +
         '<td class="num' + (st ? ' due-' + st : '') + '">' + esc(n || '随活动') + (st === 'over' ? ' <span class="tag warn">过期</span>' : '') + '</td>' +
-        '<td>' + (z['去哪做'] ? '<a class="loc" href="' + esc(z['去哪做']) + '.html" style="text-decoration:none">' + esc(z['去哪做']) + '</a>' : '') + '</td>' +
+        '<td>' + (GO_PAGES.indexOf(z['去哪做']) >= 0 ? '<a class="loc" href="' + encodeURIComponent(z['去哪做']) + '.html" style="text-decoration:none">' + esc(z['去哪做']) + '</a>' : '<span class="mut">' + esc(z['去哪做'] || '') + '</span>') + '</td>' +
         (edit ? '<td class="act"><button class="btn sm primary" data-act="done">打卡</button> <button class="btn sm" data-act="edit">编辑</button></td>' : '') + '</tr>';
     });
     if (!rows.length) h += '<tr><td colspan="7" class="nf">还没有周期事项</td></tr>';
@@ -108,7 +109,7 @@
       { k: '事项', label: '事项', required: true },
       { k: '周期', label: '周期', type: 'select', options: PERIOD_ORDER, half: true, def: '每周' },
       { k: '负责', label: '负责（角色或法名）', half: true },
-      { k: '去哪做', label: '去哪做（页面名：收纳地图 / 物料 / 活动 / 维护）', half: true },
+      { k: '去哪做', label: '去哪做', type: 'select', options: [''].concat(GO_PAGES), half: true },
       { k: '上次完成', label: '上次完成', type: 'date', half: true },
       { k: '完成人', label: '完成人', half: true },
       { k: '说明', label: '说明', type: 'textarea' }
